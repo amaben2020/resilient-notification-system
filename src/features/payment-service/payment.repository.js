@@ -14,5 +14,12 @@ export async function findTransaction(transactionId) {
     .select()
     .from(schema.transactions)
     .where(eq(schema.transactions.transactionId, transactionId));
-  return row ?? null;
+  if (!row) return null;
+
+  const notifications = await db
+    .select({ channel: schema.notifications.channel, sentAt: schema.notifications.sentAt })
+    .from(schema.notifications)
+    .where(eq(schema.notifications.transactionId, transactionId));
+
+  return { ...row, notifications };
 }

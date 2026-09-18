@@ -11,7 +11,8 @@
     "build:workers": "node scripts/build-workers.mjs",
     "test": "echo \"Error: no test specified\" && exit 1",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node --env-file-if-exists=.env src/config/migrate.js"
+    "db:migrate": "node --env-file-if-exists=.env src/config/migrate.js",
+    "smoke": "node scripts/smoke-test.mjs"
   },
   "keywords": [],
   "author": "",
