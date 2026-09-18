@@ -17,7 +17,9 @@ on:
 jobs:
   terraform:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    # GitHub environment that holds the secrets (Settings -> Environments).
+    # Distinct from inputs.environment, which selects the Terraform tfvars/state.
+    environment: notif-app
     # never let two runs touch the same state at once
     concurrency: terraform-${{ inputs.environment }}
     defaults:
