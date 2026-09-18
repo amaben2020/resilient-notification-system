@@ -95,6 +95,22 @@
       "Effect": "Allow",
       "Action": "ssm:DescribeParameters",
       "Resource": "*"
+    },
+    {
+      "Sid": "ReadWorkerLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:FilterLogEvents",
+        "logs:GetLogEvents",
+        "logs:DescribeLogStreams"
+      ],
+      "Resource": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-*:*"
+    },
+    {
+      "Sid": "DescribeLogGroups",
+      "Effect": "Allow",
+      "Action": "logs:DescribeLogGroups",
+      "Resource": "*"
     }
   ]
 }

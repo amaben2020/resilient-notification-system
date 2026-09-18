@@ -15,3 +15,7 @@ One-time setup that Terraform itself cannot do (chicken-and-egg):
    aws iam attach-group-policy --group-name notif-system-ci \
      --policy-arn arn:aws:iam::$ACCT:policy/NotifSystemTerraform
    aws iam add-user-to-group --group-name notif-system-ci --user-name <ci-user>
+
+3. Updating the policy later (IAM keeps up to 5 versions; delete an old one if that limit hits)
+   aws iam create-policy-version --policy-arn arn:aws:iam::$ACCT:policy/NotifSystemTerraform \
+     --policy-document file://terraform/bootstrap/ci-user-policy.json --set-as-default
