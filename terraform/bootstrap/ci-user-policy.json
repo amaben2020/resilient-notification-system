@@ -1,0 +1,58 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Sns",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic", "sns:DeleteTopic", "sns:GetTopicAttributes", "sns:SetTopicAttributes",
+        "sns:Subscribe", "sns:Unsubscribe", "sns:GetSubscriptionAttributes", "sns:SetSubscriptionAttributes",
+        "sns:ListSubscriptionsByTopic", "sns:ListTagsForResource", "sns:TagResource", "sns:UntagResource"
+      ],
+      "Resource": "arn:aws:sns:eu-west-2:006291942168:notif-system-*"
+    },
+    {
+      "Sid": "Sqs",
+      "Effect": "Allow",
+      "Action": [
+        "sqs:CreateQueue", "sqs:DeleteQueue", "sqs:GetQueueAttributes", "sqs:SetQueueAttributes",
+        "sqs:GetQueueUrl", "sqs:ListQueueTags", "sqs:TagQueue", "sqs:UntagQueue"
+      ],
+      "Resource": "arn:aws:sqs:eu-west-2:006291942168:notif-system-*"
+    },
+    {
+      "Sid": "LambdaFunctions",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:CreateFunction", "lambda:DeleteFunction", "lambda:GetFunction", "lambda:GetFunctionConfiguration",
+        "lambda:UpdateFunctionCode", "lambda:UpdateFunctionConfiguration", "lambda:ListVersionsByFunction",
+        "lambda:GetFunctionCodeSigningConfig", "lambda:GetPolicy", "lambda:ListTags", "lambda:TagResource", "lambda:UntagResource"
+      ],
+      "Resource": "arn:aws:lambda:eu-west-2:006291942168:function:notif-system-*"
+    },
+    {
+      "Sid": "LambdaEventSourceMappings",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:CreateEventSourceMapping", "lambda:GetEventSourceMapping", "lambda:UpdateEventSourceMapping",
+        "lambda:DeleteEventSourceMapping", "lambda:ListEventSourceMappings"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Ssm",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:PutParameter", "ssm:GetParameter", "ssm:GetParameters", "ssm:DeleteParameter",
+        "ssm:AddTagsToResource", "ssm:RemoveTagsFromResource", "ssm:ListTagsForResource"
+      ],
+      "Resource": "arn:aws:ssm:eu-west-2:006291942168:parameter/notif-system-*"
+    },
+    {
+      "Sid": "SsmDescribe",
+      "Effect": "Allow",
+      "Action": "ssm:DescribeParameters",
+      "Resource": "*"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+One-time setup that Terraform itself cannot do (chicken-and-egg):
+
+1. State bucket
+   aws s3api create-bucket --bucket notif-system-tfstate --region eu-west-2 \
+     --create-bucket-configuration LocationConstraint=eu-west-2
+   aws s3api put-bucket-versioning --bucket notif-system-tfstate --versioning-configuration Status=Enabled
+
+2. Permissions for the IAM user whose keys CI uses (scoped to notif-system-* resources)
+   aws iam put-user-policy --user-name <ci-user> --policy-name NotifSystemTerraform \
+     --policy-document file://terraform/bootstrap/ci-user-policy.json
