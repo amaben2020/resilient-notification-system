@@ -11,15 +11,8 @@ on:
       apply:
         required: true
         type: boolean # false on pull requests (plan only), true on push
-    secrets:
-      AWS_ACCESS_KEY_ID:
-        required: true
-      AWS_SECRET_ACCESS_KEY:
-        required: true
-      DATABASE_URL:
-        required: true
-      GRAFANA_CLOUD_API_KEY:
-        required: false
+    # Secrets come via `secrets: inherit` from the caller, so both repo-level
+    # and environment-level (staging/prod) secrets resolve here.
 
 jobs:
   terraform:
