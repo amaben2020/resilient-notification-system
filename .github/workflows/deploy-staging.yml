@@ -1,0 +1,21 @@
+# Pull request into staging -> plan only (review the diff in the Actions log).
+# Push / merge into staging      -> plan + apply.
+name: Deploy to Staging
+
+on:
+  pull_request:
+    branches: [staging]
+  push:
+    branches: [staging]
+
+jobs:
+  staging:
+    uses: ./.github/workflows/terraform.yml
+    with:
+      environment: staging
+      apply: ${{ github.event_name == 'push' }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GRAFANA_CLOUD_API_KEY: ${{ secrets.GRAFANA_CLOUD_API_KEY }}

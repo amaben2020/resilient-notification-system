@@ -1,0 +1,83 @@
+# Reusable workflow: build workers -> migrate DB -> terraform plan -> (apply).
+# Called by deploy-staging.yml and deploy-prod.yml with a different `environment`.
+name: Terraform
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string # staging | prod
+      apply:
+        required: true
+        type: boolean # false on pull requests (plan only), true on push
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      DATABASE_URL:
+        required: true
+      GRAFANA_CLOUD_API_KEY:
+        required: false
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    # never let two runs touch the same state at once
+    concurrency: terraform-${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: terraform
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_VAR_database_url: ${{ secrets.DATABASE_URL }}
+      TF_VAR_grafana_cloud_api_key: ${{ secrets.GRAFANA_CLOUD_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install & bundle Lambda workers
+        working-directory: .
+        run: |
+          npm ci
+          npm run build:workers
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-2
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: terraform init -backend-config=environments/${{ inputs.environment }}.backend.hcl
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        run: terraform plan -var-file=environments/${{ inputs.environment }}.tfvars -out=tfplan
+
+      # Schema first, so the new Lambda code never runs against missing tables.
+      - name: Run DB migrations
+        if: inputs.apply
+        working-directory: .
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run db:migrate
+
+      - name: Terraform apply
+        if: inputs.apply
+        run: terraform apply tfplan

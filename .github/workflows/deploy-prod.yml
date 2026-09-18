@@ -1,0 +1,21 @@
+# Pull request into main/master -> plan only.
+# Push / merge into main/master -> plan + apply to prod.
+name: Deploy to Production
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+jobs:
+  prod:
+    uses: ./.github/workflows/terraform.yml
+    with:
+      environment: prod
+      apply: ${{ github.event_name == 'push' }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GRAFANA_CLOUD_API_KEY: ${{ secrets.GRAFANA_CLOUD_API_KEY }}
