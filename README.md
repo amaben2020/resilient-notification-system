@@ -1,4 +1,4 @@
-Folder structure
+Folder structure:
 
 notif-system/
 ├── node_modules/
