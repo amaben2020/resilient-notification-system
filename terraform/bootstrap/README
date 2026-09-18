@@ -5,6 +5,13 @@ One-time setup that Terraform itself cannot do (chicken-and-egg):
      --create-bucket-configuration LocationConstraint=eu-west-2
    aws s3api put-bucket-versioning --bucket notif-system-tfstate --versioning-configuration Status=Enabled
 
-2. Permissions for the IAM user whose keys CI uses (scoped to notif-system-* resources)
-   aws iam put-user-policy --user-name <ci-user> --policy-name NotifSystemTerraform \
+2. Permissions for the IAM user whose keys CI uses (scoped to notif-system-* resources).
+   Attached via a group: inline user policies are capped at 2048 bytes total and
+   a user can hold at most 10 managed policies, group policies count against neither.
+   ACCT=$(aws sts get-caller-identity --query Account --output text)
+   aws iam create-policy --policy-name NotifSystemTerraform \
      --policy-document file://terraform/bootstrap/ci-user-policy.json
+   aws iam create-group --group-name notif-system-ci
+   aws iam attach-group-policy --group-name notif-system-ci \
+     --policy-arn arn:aws:iam::$ACCT:policy/NotifSystemTerraform
+   aws iam add-user-to-group --group-name notif-system-ci --user-name <ci-user>
