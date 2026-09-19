@@ -16,6 +16,10 @@ One-time setup that Terraform itself cannot do (chicken-and-egg):
      --policy-arn arn:aws:iam::$ACCT:policy/NotifSystemTerraform
    aws iam add-user-to-group --group-name notif-system-ci --user-name <ci-user>
 
-3. Updating the policy later (IAM keeps up to 5 versions; delete an old one if that limit hits)
+3. (Optional) Per-developer Neon database branches from CI need two more GitHub secrets:
+   NEON_API_KEY      https://console.neon.tech -> Account settings -> API keys
+   NEON_PROJECT_ID   https://console.neon.tech -> project -> Settings -> General
+
+4. Updating the policy later (IAM keeps up to 5 versions; delete an old one if that limit hits)
    aws iam create-policy-version --policy-arn arn:aws:iam::$ACCT:policy/NotifSystemTerraform \
      --policy-document file://terraform/bootstrap/ci-user-policy.json --set-as-default

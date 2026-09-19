@@ -58,7 +58,10 @@ jobs:
         run: terraform fmt -check -recursive
 
       - name: Terraform init
-        run: terraform init -backend-config=environments/${{ inputs.environment }}.backend.hcl
+        run: |
+          terraform init \
+            -backend-config=environments/backend.hcl \
+            -backend-config="key=${{ inputs.environment }}/terraform.tfstate"
 
       - name: Terraform validate
         run: terraform validate

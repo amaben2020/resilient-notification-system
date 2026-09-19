@@ -1,0 +1,104 @@
+# Personal, isolated environment per developer.
+#   Actions -> "Dev stack" -> Run workflow -> developer=ben, action=up
+# Creates notif-system-dev-ben-* in AWS (own state file dev-ben/terraform.tfstate)
+# and, when NEON_API_KEY / NEON_PROJECT_ID secrets exist, a Neon DB branch
+# "dev-ben" so the developer's data is isolated too. action=down tears it all down.
+name: Dev stack
+
+on:
+  workflow_dispatch:
+    inputs:
+      developer:
+        description: "Developer name (lowercase, e.g. ben)"
+        required: true
+        type: string
+      action:
+        description: "up = create/update, down = destroy"
+        required: true
+        type: choice
+        options: [up, down]
+        default: up
+
+jobs:
+  stack:
+    runs-on: ubuntu-latest
+    environment: notif-app
+    concurrency: terraform-dev-${{ inputs.developer }}
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      STACK: dev-${{ inputs.developer }}
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:workers
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-2
+      - uses: hashicorp/setup-terraform@v3
+
+      # Own DB branch when Neon secrets are present; otherwise the shared DB.
+      - name: Resolve database for this stack
+        id: db
+        run: |
+          if [ -n "$NEON_API_KEY" ] && [ -n "$NEON_PROJECT_ID" ]; then
+            url=$(scripts/neon-branch.sh up "$STACK")
+            echo "::add-mask::$url"
+            echo "isolated Neon branch $STACK" >> "$GITHUB_STEP_SUMMARY"
+          else
+            url='${{ secrets.DATABASE_URL }}'
+            echo "shared database (add NEON_API_KEY + NEON_PROJECT_ID for isolation)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Terraform init
+        working-directory: terraform
+        run: |
+          terraform init \
+            -backend-config=environments/backend.hcl \
+            -backend-config="key=${STACK}/terraform.tfstate"
+
+      - name: Terraform apply
+        if: inputs.action == 'up'
+        working-directory: terraform
+        env:
+          TF_VAR_database_url: ${{ steps.db.outputs.url }}
+        run: |
+          terraform apply -auto-approve -var="environment=${STACK}"
+          {
+            echo "### Stack \`${STACK}\`"
+            echo '```'
+            terraform output
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Migrate + integration test against this stack
+        if: inputs.action == 'up'
+        env:
+          DATABASE_URL: ${{ steps.db.outputs.url }}
+        run: |
+          npm run db:migrate
+          export PAYMENT_CONFIRMED_TOPIC_ARN=$(terraform -chdir=terraform output -raw payment_confirmed_topic_arn)
+          npm run test:integration
+
+      - name: Terraform destroy
+        if: inputs.action == 'down'
+        working-directory: terraform
+        env:
+          TF_VAR_database_url: unused
+        run: terraform destroy -auto-approve -var="environment=${STACK}"
+
+      - name: Delete Neon branch
+        if: inputs.action == 'down' && env.NEON_API_KEY != ''
+        run: scripts/neon-branch.sh down "$STACK"
