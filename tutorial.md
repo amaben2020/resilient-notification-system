@@ -628,6 +628,7 @@ symptom -> cause mapping is most of the job.
 | 10 | `lambda:ListTags on event-source-mapping:...` denied after functions created | Event source mappings have their own ARN shape, not `function:` | Add statement for `event-source-mapping:*` |
 | 11 | Console shows nothing in eu-west-2 | `List*` APIs cannot be resource-scoped; policy had none | Read-only `ListFunctions`/`ListQueues`/`ListTopics` on `*` |
 | 12 | Bundled worker: `Dynamic require of "node:os" is not supported` | pino is CJS, esbuild ESM output has no `require` | `createRequire` banner in esbuild config |
+| 13 | Public Function URL returns `403 Forbidden` with a correct-looking policy | Since Oct 2025 auth-NONE URLs need **two** statements: `InvokeFunctionUrl` and `InvokeFunction` (condition `InvokedViaFunctionUrl`); provider 5.x could not express the second | Upgrade `hashicorp/aws` to `~> 6.0`, add second `aws_lambda_permission` |
 
 The pattern behind 7-11: read the `AccessDenied` message literally. It names
 the exact action and the exact resource ARN to add.

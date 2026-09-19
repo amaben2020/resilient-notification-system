@@ -75,9 +75,10 @@ resource "aws_lambda_function_url" "api" {
   }
 }
 
-# Function URLs with auth NONE still need an explicit resource policy allowing
-# anonymous invocation.
-resource "aws_lambda_permission" "api_public" {
+# Since Oct 2025 a public (auth NONE) Function URL needs TWO resource-policy
+# statements: InvokeFunctionUrl, and InvokeFunction restricted to URL calls.
+# Without the second one every request gets 403 Forbidden.
+resource "aws_lambda_permission" "api_public_url" {
   statement_id           = "AllowPublicFunctionUrl"
   action                 = "lambda:InvokeFunctionUrl"
   function_name          = aws_lambda_function.api.function_name
@@ -85,7 +86,20 @@ resource "aws_lambda_permission" "api_public" {
   function_url_auth_type = "NONE"
 }
 
+resource "aws_lambda_permission" "api_public_invoke" {
+  statement_id             = "AllowPublicInvokeViaFunctionUrl"
+  action                   = "lambda:InvokeFunction"
+  function_name            = aws_lambda_function.api.function_name
+  principal                = "*"
+  invoked_via_function_url = true
+}
+
 output "api_url" {
   description = "Public base URL of the payments API"
   value       = aws_lambda_function_url.api.function_url
+}
+
+moved {
+  from = aws_lambda_permission.api_public
+  to   = aws_lambda_permission.api_public_url
 }
