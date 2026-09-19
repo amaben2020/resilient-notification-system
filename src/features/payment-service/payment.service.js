@@ -15,6 +15,10 @@ export async function processPayment(userId, amount) {
       userId,
       amount,
     });
+    logger.info(
+      { event: 'PAYMENT_CREATED', transactionId: transaction.transactionId, userId, amount },
+      `payment ${transaction.transactionId} stored as pending`,
+    );
 
     // 2. Fire ONE event. SNS fans it out to the email/sms/order queues.
     await publishPaymentConfirmed(transaction);
@@ -23,6 +27,7 @@ export async function processPayment(userId, amount) {
     return transaction;
   } catch (err) {
     paymentCounter.inc({ status: 'failed' });
+    logger.error({ event: 'PAYMENT_FAILED', userId, amount, err }, err.message);
     throw err;
   } finally {
     end();
@@ -37,7 +42,7 @@ async function publishPaymentConfirmed({ userId, transactionId, amount }) {
   const TopicArn = process.env.PAYMENT_CONFIRMED_TOPIC_ARN;
   if (!TopicArn) {
     // Local dev without AWS: the row is still written, the event just isn't sent.
-    logger.warn({ transactionId }, 'PAYMENT_CONFIRMED_TOPIC_ARN not set, skipping SNS publish');
+    logger.warn({ event: 'EVENT_PUBLISH_SKIPPED', transactionId }, 'PAYMENT_CONFIRMED_TOPIC_ARN not set');
     return;
   }
 
@@ -47,5 +52,8 @@ async function publishPaymentConfirmed({ userId, transactionId, amount }) {
       Message: JSON.stringify({ userId, transactionId, amount }),
     }),
   );
-  logger.info({ transactionId, userId }, 'payment_confirmed published');
+  logger.info(
+    { event: 'EVENT_PUBLISHED', transactionId, userId, topic: TopicArn.split(':').pop() },
+    `payment_confirmed for ${transactionId} -> SNS (fans out to email, sms, order queues)`,
+  );
 }

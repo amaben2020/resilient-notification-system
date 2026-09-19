@@ -13,6 +13,8 @@ for (const name of workers) {
     format: 'esm', // Lambda's "index.handler" resolves index.mjs -> export const handler
     outfile: `dist/${name}/index.mjs`,
     minify: false,
+    // Lambda logs are machine-read: always JSON, never the pretty transport.
+    define: { 'process.env.LOG_FORMAT': '"json"' },
     // CJS deps (pino) call require() at runtime; give the ESM bundle a real one.
     banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
     logLevel: 'info',
