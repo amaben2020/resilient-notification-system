@@ -201,11 +201,29 @@ JSON object per line to stdout:
 {"level":30,"service":"notif-system","worker":"order","transactionId":"txn_...","msg":"order confirmed"}
 ```
 
+Locally the same line is pretty-printed (`pino-pretty`, in-process, sync):
+
+```
+[07:14:43.124] INFO: EVENT_PUBLISHED — payment_confirmed for txn_... -> SNS (fans out to email, sms, order queues)
+    transactionId: "txn_..."
+    topic: "notif-system-staging-payment-confirmed"
+```
+
+Every call carries an `event` name. The lifecycle of one payment reads:
+
+| Where | Events, in order |
+|---|---|
+| API | `PAYMENT_CREATED` -> `EVENT_PUBLISHED` (or `EVENT_PUBLISH_SKIPPED`) -> `HTTP_REQUEST` |
+| each worker | `QUEUE_BATCH_RECEIVED` -> `QUEUE_MESSAGE_RECEIVED` -> `PROCESSING` -> `EMAIL_SENT` / `SMS_SENT` / `ORDER_CONFIRMED` |
+| failures | `PAYMENT_FAILED`, `HTTP_ERROR`, `QUEUE_MESSAGE_FAILED` (then rethrown so SQS retries) |
+
 Lambda ships stdout to CloudWatch automatically; on EC2, Alloy tails it. The
 `transactionId` field is the correlation key: filter on it in CloudWatch Logs
 Insights and you see the API publish plus all three workers for one payment.
 pino was chosen over winston because it is JSON-first, faster, and needs no
-transport configuration for stdout-based collectors.
+transport configuration for stdout-based collectors. Bundled workers are
+pinned to JSON at build time (`define` in esbuild) because the pretty stream
+is a dev-only dependency.
 
 ### 3.5 Bundling workers for Lambda
 
