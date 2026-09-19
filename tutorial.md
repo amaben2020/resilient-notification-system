@@ -546,6 +546,60 @@ Terraform reads any `TF_VAR_<name>` environment variable as the variable
 
 ---
 
+### 3.7 Reading the logs in Grafana
+
+Lambda writes stdout to CloudWatch Logs, one log group per function. Rather
+than shipping those somewhere, Grafana Cloud queries them in place through its
+**CloudWatch data source**, which also exposes the Lambda metrics AWS already
+collects (invocations, errors, duration, throttles).
+
+```mermaid
+flowchart LR
+    L1[λ api] --> CW[CloudWatch Logs<br/>7 log groups]
+    L2[λ email/sms/order] --> CW
+    L3[λ ...] --> CWM[CloudWatch Metrics<br/>AWS/Lambda, AWS/SQS]
+    CW -->|Logs Insights| G[Grafana Cloud<br/>CloudWatch data source]
+    CWM -->|GetMetricData| G
+    IAM[IAM user grafana-cloudwatch<br/>read-only, notif-system-* log groups] -.credentials.-> G
+```
+
+Setup (once): create the read-only IAM user (bootstrap README step 4), then in
+Grafana: **Connections -> Data sources -> Add -> CloudWatch**, authentication
+"Access & secret key", default region `eu-west-2`, Save & test.
+
+Queries that pay off (Explore -> CloudWatch -> Logs, pick the
+`/aws/lambda/notif-system-staging-*` log groups):
+
+```
+# everything that happened, newest first
+fields @timestamp, event, worker, transactionId, msg
+| filter ispresent(event)
+| sort @timestamp desc
+
+# one payment across API and all three workers
+fields @timestamp, event, worker, msg
+| filter transactionId = "txn_..."
+| sort @timestamp asc
+
+# failures only
+fields @timestamp, event, worker, transactionId, msg, err.message
+| filter event in ["QUEUE_MESSAGE_FAILED", "PAYMENT_FAILED", "HTTP_ERROR"]
+
+# throughput per worker per 5 minutes
+stats count() by bin(5m), worker
+| filter event in ["EMAIL_SENT", "SMS_SENT", "ORDER_CONFIRMED"]
+```
+
+Because every line is JSON, CloudWatch indexes the fields automatically:
+`event`, `worker`, `transactionId` are queryable without any parsing rules.
+That is the concrete return on structured logging.
+
+For metrics (Explore -> CloudWatch -> Metrics): namespace `AWS/Lambda`,
+metric `Errors` or `Duration`, dimension `FunctionName`; namespace `AWS/SQS`,
+metric `ApproximateAgeOfOldestMessage` per queue is the one to alert on (a
+rising value means a consumer is broken or falling behind), and
+`ApproximateNumberOfMessagesVisible` on the `-dlq` queues should stay at 0.
+
 ## 6. Testing
 
 ```mermaid
