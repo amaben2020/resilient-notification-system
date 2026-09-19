@@ -111,6 +111,17 @@
       "Effect": "Allow",
       "Action": "logs:DescribeLogGroups",
       "Resource": "*"
+    },
+    {
+      "Sid": "ConsoleListReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:ListFunctions",
+        "sqs:ListQueues",
+        "sns:ListTopics",
+        "sns:ListSubscriptions"
+      ],
+      "Resource": "*"
     }
   ]
 }
