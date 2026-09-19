@@ -13,6 +13,8 @@ for (const name of workers) {
     format: 'esm', // Lambda's "index.handler" resolves index.mjs -> export const handler
     outfile: `dist/${name}/index.mjs`,
     minify: false,
+    // CJS deps (pino) call require() at runtime; give the ESM bundle a real one.
+    banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
     logLevel: 'info',
   });
 }

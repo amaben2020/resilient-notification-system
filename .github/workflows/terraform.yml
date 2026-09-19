@@ -39,10 +39,11 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install & bundle Lambda workers
+      - name: Install, test, bundle Lambda workers
         working-directory: .
         run: |
           npm ci
+          npm test
           npm run build:workers
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -76,3 +77,14 @@ jobs:
       - name: Terraform apply
         if: inputs.apply
         run: terraform apply tfplan
+
+      # Post-deploy check against the real stack: publish to the topic, assert
+      # all three workers processed it (see tests/integration/fanout.test.js).
+      - name: Integration test (fan-out through real SNS/SQS/Lambda)
+        if: inputs.apply
+        working-directory: .
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          export PAYMENT_CONFIRMED_TOPIC_ARN=$(terraform -chdir=terraform output -raw payment_confirmed_topic_arn)
+          npm run test:integration

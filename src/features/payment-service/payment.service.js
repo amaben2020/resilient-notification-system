@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 import { insertTransaction, findTransaction } from './payment.repository.js';
 import { paymentCounter, paymentDuration } from '../../observability/metrics.js';
+import { logger } from '../../observability/logger.js';
 
 const sns = new SNSClient({ region: process.env.AWS_REGION || 'eu-west-2' });
 
@@ -36,7 +37,7 @@ async function publishPaymentConfirmed({ userId, transactionId, amount }) {
   const TopicArn = process.env.PAYMENT_CONFIRMED_TOPIC_ARN;
   if (!TopicArn) {
     // Local dev without AWS: the row is still written, the event just isn't sent.
-    console.warn('PAYMENT_CONFIRMED_TOPIC_ARN not set, skipping SNS publish');
+    logger.warn({ transactionId }, 'PAYMENT_CONFIRMED_TOPIC_ARN not set, skipping SNS publish');
     return;
   }
 
@@ -46,4 +47,5 @@ async function publishPaymentConfirmed({ userId, transactionId, amount }) {
       Message: JSON.stringify({ userId, transactionId, amount }),
     }),
   );
+  logger.info({ transactionId, userId }, 'payment_confirmed published');
 }

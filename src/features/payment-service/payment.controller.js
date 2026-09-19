@@ -3,6 +3,7 @@ import { processPayment, findPayment } from './payment.service.js';
 export async function createPayment(req, res, next) {
   try {
     const { userId, amount } = req.body;
+    // where we use the queue
     const result = await processPayment(userId, amount);
     res.status(201).json(result);
   } catch (err) {
