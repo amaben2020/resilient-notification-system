@@ -428,6 +428,66 @@ What is required to promote:
 Nothing is deployed from `dev`; it exists so tests run on every push without
 touching AWS. That is also why `ci.yml` needs no secrets.
 
+### 5.1b Personal stacks: one isolated environment per developer
+
+Working against staging from a laptop is fine for one person. With several
+developers, Ben's test messages would be processed by the same Lambdas and
+land in the same tables as Mitchell's. `dev-stack.yml` gives each developer
+their own copy of everything:
+
+```mermaid
+flowchart LR
+    subgraph ben["Ben  (environment = dev-ben)"]
+        b1[SNS notif-system-dev-ben-payment-confirmed]
+        b2[SQS dev-ben-*-queue x3]
+        b3[Lambda dev-ben-*-worker x3]
+        b4[(Neon branch dev-ben)]
+        b5[S3 state dev-ben/terraform.tfstate]
+    end
+    subgraph mitchell["Mitchell  (environment = dev-mitchell)"]
+        m1[SNS notif-system-dev-mitchell-payment-confirmed]
+        m2[SQS dev-mitchell-*-queue x3]
+        m3[Lambda dev-mitchell-*-worker x3]
+        m4[(Neon branch dev-mitchell)]
+        m5[S3 state dev-mitchell/terraform.tfstate]
+    end
+    subgraph shared["Shared"]
+        code[same main.tf]
+        bucket[same S3 bucket]
+        parent[(Neon default branch)]
+    end
+    code --> ben
+    code --> mitchell
+    parent -.copy-on-write.-> b4
+    parent -.copy-on-write.-> m4
+```
+
+How it works, and why it costs almost nothing extra to build:
+
+| Isolation layer | Mechanism | Change needed |
+|---|---|---|
+| AWS resources | every name is `${project}-${var.environment}-...`; run with `-var environment=dev-ben` | none, `for_each` + `name_prefix` already did this |
+| Terraform state | same bucket, different key: `-backend-config="key=dev-ben/terraform.tfstate"` | split `backend.hcl` so the key is passed per stack |
+| Database | Neon **branch** per developer: a copy-on-write clone of the default branch with its own connection string | `scripts/neon-branch.sh` calls the Neon REST API; needs `NEON_API_KEY` + `NEON_PROJECT_ID` secrets |
+| Permissions | the CI policy allows `notif-system-*`, so `notif-system-dev-ben-*` is already covered | none |
+| Naming | `validation` block on `var.environment`: `staging`, `prod` or `dev-[a-z0-9]{1,20}` | guards against typos creating stray stacks |
+
+Usage:
+
+```
+Actions -> Dev stack -> Run workflow -> developer: ben, action: up
+```
+
+The job summary prints the stack's outputs (topic ARN, queue URLs). Ben puts
+that ARN and his branch's `DATABASE_URL` in his local `.env`, and his laptop
+now talks only to his stack. `action: down` runs `terraform destroy` and
+deletes the Neon branch. Serverless resources idle at $0, so a forgotten
+stack costs nothing but clutter; the pattern is still to tear it down when the
+feature merges.
+
+Without the Neon secrets the workflow falls back to the shared database and
+only isolates the AWS side. That is what the first demo run used.
+
 ### 5.2 The pipeline
 
 Both `deploy-*.yml` files are thin callers of one reusable workflow:
