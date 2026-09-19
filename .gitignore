@@ -1,2 +1,9 @@
 node_modules
 .env
+terraform/.terraform/
+*.tfstate
+*.tfstate.*
+dist/
+.terraform.lock.hcl
+tfplan
+terraform/*_override.tf

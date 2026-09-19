@@ -1,0 +1,17 @@
+# Pull request into main/master -> plan only.
+# Push / merge into main/master -> plan + apply to prod.
+name: Deploy to Production
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+jobs:
+  prod:
+    uses: ./.github/workflows/terraform.yml
+    with:
+      environment: prod
+      apply: ${{ github.event_name == 'push' }}
+    secrets: inherit

@@ -1,4 +1,4 @@
-import app from './app';
+import app from './app.js';
 
 const PORT = process.env.PORT || 3300;
 
@@ -11,7 +11,7 @@ process.on('SIGTERM', () => {
 
   server.close(() => {
     console.log('HTTP server closed — no more requests being accepted');
-    // close DB connections, Redis clients, etc. here
+    // neon-http is stateless (plain HTTPS), so there is no DB connection to close
     process.exit(0);
   });
 
