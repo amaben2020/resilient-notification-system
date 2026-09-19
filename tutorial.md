@@ -594,6 +594,20 @@ Because every line is JSON, CloudWatch indexes the fields automatically:
 `event`, `worker`, `transactionId` are queryable without any parsing rules.
 That is the concrete return on structured logging.
 
+**Dashboard.** `observability/grafana-dashboard.json` is importable
+(Dashboards -> New -> Import -> upload, pick the CloudWatch data source). It has
+an `env` switch (staging / prod) and three rows:
+
+| Row | Panels | Source |
+|---|---|---|
+| Lambda | invocations, errors, duration p95, concurrency, throttles, **max memory used** | `AWS/Lambda` metrics; memory is parsed from the `REPORT` line of every invocation (`@maxMemoryUsed`), no agent needed |
+| SQS | age of oldest message, sent/received/deleted, **DLQ depth** | `AWS/SQS` metrics |
+| Logs | events per worker, failures, live event stream | Logs Insights on the four log groups |
+
+There is no CPU metric for Lambda: nothing is running between invocations.
+Lambda Insights (an extension layer) adds CPU/network/memory utilisation but
+bills ~8 custom metrics per function, which is not worth it at this size.
+
 For metrics (Explore -> CloudWatch -> Metrics): namespace `AWS/Lambda`,
 metric `Errors` or `Duration`, dimension `FunctionName`; namespace `AWS/SQS`,
 metric `ApproximateAgeOfOldestMessage` per queue is the one to alert on (a

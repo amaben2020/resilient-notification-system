@@ -1,0 +1,835 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_CLOUDWATCH",
+      "label": "CloudWatch",
+      "type": "datasource",
+      "pluginId": "cloudwatch",
+      "pluginName": "CloudWatch"
+    }
+  ],
+  "title": "notif-system",
+  "uid": "notif-system",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": [
+    "notif-system",
+    "aws",
+    "lambda",
+    "sqs"
+  ],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "timezone": "browser",
+  "templating": {
+    "list": [
+      {
+        "name": "env",
+        "label": "Environment",
+        "type": "custom",
+        "query": "staging,prod",
+        "multi": false,
+        "includeAll": false,
+        "current": {
+          "selected": true,
+          "text": "staging",
+          "value": "staging"
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "staging",
+            "value": "staging"
+          },
+          {
+            "selected": false,
+            "text": "prod",
+            "value": "prod"
+          }
+        ]
+      },
+      {
+        "name": "function",
+        "label": "Lambda",
+        "type": "query",
+        "datasource": {
+          "type": "cloudwatch",
+          "uid": "${DS_CLOUDWATCH}"
+        },
+        "refresh": 2,
+        "query": "dimension_values(eu-west-2, AWS/Lambda, Invocations, FunctionName)",
+        "regex": "/^notif-system-$env-.*/",
+        "multi": true,
+        "includeAll": true,
+        "allValue": "*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [],
+        "sort": 1
+      },
+      {
+        "name": "queue",
+        "label": "Queue",
+        "type": "query",
+        "datasource": {
+          "type": "cloudwatch",
+          "uid": "${DS_CLOUDWATCH}"
+        },
+        "refresh": 2,
+        "query": "dimension_values(eu-west-2, AWS/SQS, NumberOfMessagesSent, QueueName)",
+        "regex": "/^notif-system-$env-.*-queue$/",
+        "multi": true,
+        "includeAll": true,
+        "allValue": "*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [],
+        "sort": 1
+      },
+      {
+        "name": "dlq",
+        "label": "DLQ",
+        "type": "query",
+        "datasource": {
+          "type": "cloudwatch",
+          "uid": "${DS_CLOUDWATCH}"
+        },
+        "refresh": 2,
+        "query": "dimension_values(eu-west-2, AWS/SQS, NumberOfMessagesSent, QueueName)",
+        "regex": "/^notif-system-$env-.*-dlq$/",
+        "multi": true,
+        "includeAll": true,
+        "allValue": "*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [],
+        "sort": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 100,
+      "type": "row",
+      "title": "Lambda",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 1,
+      "title": "Invocations",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "${DS_CLOUDWATCH}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "${DS_CLOUDWATCH}"
+          },
+          "queryMode": "Metrics",
+          "region": "eu-west-2",
+          "namespace": "AWS/Lambda",
+          "metricName": "Invocations",
+          "statistic": "Sum",
+          "period": "",
+          "dimensions": {
+            "FunctionName": [
+              "$function"
+            ]
+          },
+          "matchExact": false,
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "label": "${PROP('Dim.FunctionName')}"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 2,
+      "title": "Errors",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "${DS_CLOUDWATCH}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "${DS_CLOUDWATCH}"
+          },
+          "queryMode": "Metrics",
+          "region": "eu-west-2",
+          "namespace": "AWS/Lambda",
+          "metricName": "Errors",
+          "statistic": "Sum",
+          "period": "",
+          "dimensions": {
+            "FunctionName": [
+              "$function"
+            ]
+          },
+          "matchExact": false,
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "label": "${PROP('Dim.FunctionName')}"
+        }
+      ],
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "title": "Duration p95",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "${DS_CLOUDWATCH}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "${DS_CLOUDWATCH}"
+          },
+          "queryMode": "Metrics",
+          "region": "eu-west-2",
+          "namespace": "AWS/Lambda",
+          "metricName": "Duration",
+          "statistic": "p95",
+          "period": "",
+          "dimensions": {
+            "FunctionName": [
+              "$function"
+            ]
+          },
+          "matchExact": false,
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "label": "${PROP('Dim.FunctionName')}"
+        }
+      ],
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 4,
+      "title": "Concurrent executions (max)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "${DS_CLOUDWATCH}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "${DS_CLOUDWATCH}"
+          },
+          "queryMode": "Metrics",
+          "region": "eu-west-2",
+          "namespace": "AWS/Lambda",
+          "metricName": "ConcurrentExecutions",
+          "statistic": "Maximum",
+          "period": "",
+          "dimensions": {
+            "FunctionName": [
+              "$function"
+            ]
+          },
+          "matchExact": false,
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "label": "${PROP('Dim.FunctionName')}"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 5,
+      "title": "Throttles",
+      "type": "stat",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "${DS_CLOUDWATCH}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "${DS_CLOUDWATCH}"
+          },
+          "queryMode": "Metrics",
+          "region": "eu-west-2",
+          "namespace": "AWS/Lambda",
+          "metricName": "Throttles",
+          "statistic": "Sum",
+          "period": "",
+          "dimensions": {
+            "FunctionName": [
+              "$function"
+            ]
+          },
+          "matchExact": false,
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "label": "${PROP('Dim.FunctionName')}"
+        }
+      ],
+      "gridPos": {
+        "x": 8,
+        "y": 8,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ]
+        },
+        "colorMode": "background"
+      }
+    },
+    {
+      "id": 6,
+      "title": "Max memory used per invocation (from REPORT lines)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "${DS_CLOUDWATCH}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "${DS_CLOUDWATCH}"
+          },
+          "queryMode": "Logs",
+          "region": "eu-west-2",
+          "expression": "filter @type = \"REPORT\" | stats max(@maxMemoryUsed / 1024 / 1024) as max_mb, avg(@maxMemoryUsed / 1024 / 1024) as avg_mb, max(@memorySize / 1024 / 1024) as limit_mb by bin(5m)",
+          "logGroups": [
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-api:*",
+              "name": "/aws/lambda/notif-system-$env-api"
+            },
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-email-worker:*",
+              "name": "/aws/lambda/notif-system-$env-email-worker"
+            },
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-sms-worker:*",
+              "name": "/aws/lambda/notif-system-$env-sms-worker"
+            },
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-order-worker:*",
+              "name": "/aws/lambda/notif-system-$env-order-worker"
+            }
+          ],
+          "statsGroups": []
+        }
+      ],
+      "gridPos": {
+        "x": 16,
+        "y": 8,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decmbytes"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 200,
+      "type": "row",
+      "title": "SQS",
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 7,
+      "title": "Age of oldest message (alert on this)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "${DS_CLOUDWATCH}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "${DS_CLOUDWATCH}"
+          },
+          "queryMode": "Metrics",
+          "region": "eu-west-2",
+          "namespace": "AWS/SQS",
+          "metricName": "ApproximateAgeOfOldestMessage",
+          "statistic": "Maximum",
+          "period": "",
+          "dimensions": {
+            "QueueName": [
+              "$queue"
+            ]
+          },
+          "matchExact": false,
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "label": "${PROP('Dim.QueueName')}"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 8,
+      "title": "Messages sent / received / deleted",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "${DS_CLOUDWATCH}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "${DS_CLOUDWATCH}"
+          },
+          "queryMode": "Metrics",
+          "region": "eu-west-2",
+          "namespace": "AWS/SQS",
+          "metricName": "NumberOfMessagesSent",
+          "statistic": "Sum",
+          "period": "",
+          "dimensions": {
+            "QueueName": [
+              "$queue"
+            ]
+          },
+          "matchExact": false,
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "label": "sent ${PROP('Dim.QueueName')}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "${DS_CLOUDWATCH}"
+          },
+          "queryMode": "Metrics",
+          "region": "eu-west-2",
+          "namespace": "AWS/SQS",
+          "metricName": "NumberOfMessagesReceived",
+          "statistic": "Sum",
+          "period": "",
+          "dimensions": {
+            "QueueName": [
+              "$queue"
+            ]
+          },
+          "matchExact": false,
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "label": "received ${PROP('Dim.QueueName')}"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "${DS_CLOUDWATCH}"
+          },
+          "queryMode": "Metrics",
+          "region": "eu-west-2",
+          "namespace": "AWS/SQS",
+          "metricName": "NumberOfMessagesDeleted",
+          "statistic": "Sum",
+          "period": "",
+          "dimensions": {
+            "QueueName": [
+              "$queue"
+            ]
+          },
+          "matchExact": false,
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "label": "deleted ${PROP('Dim.QueueName')}"
+        }
+      ],
+      "gridPos": {
+        "x": 8,
+        "y": 16,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 9,
+      "title": "Dead-letter queue depth (should be 0)",
+      "type": "stat",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "${DS_CLOUDWATCH}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "${DS_CLOUDWATCH}"
+          },
+          "queryMode": "Metrics",
+          "region": "eu-west-2",
+          "namespace": "AWS/SQS",
+          "metricName": "ApproximateNumberOfMessagesVisible",
+          "statistic": "Maximum",
+          "period": "",
+          "dimensions": {
+            "QueueName": [
+              "$dlq"
+            ]
+          },
+          "matchExact": false,
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "label": "${PROP('Dim.QueueName')}"
+        }
+      ],
+      "gridPos": {
+        "x": 16,
+        "y": 16,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background"
+      }
+    },
+    {
+      "id": 300,
+      "type": "row",
+      "title": "Logs",
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 24,
+        "h": 1
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 10,
+      "title": "Events per worker (5m)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "${DS_CLOUDWATCH}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "${DS_CLOUDWATCH}"
+          },
+          "queryMode": "Logs",
+          "region": "eu-west-2",
+          "expression": "filter event in [\"EMAIL_SENT\", \"SMS_SENT\", \"ORDER_CONFIRMED\", \"EVENT_PUBLISHED\"] | stats count() by bin(5m), event",
+          "logGroups": [
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-api:*",
+              "name": "/aws/lambda/notif-system-$env-api"
+            },
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-email-worker:*",
+              "name": "/aws/lambda/notif-system-$env-email-worker"
+            },
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-sms-worker:*",
+              "name": "/aws/lambda/notif-system-$env-sms-worker"
+            },
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-order-worker:*",
+              "name": "/aws/lambda/notif-system-$env-order-worker"
+            }
+          ],
+          "statsGroups": []
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 11,
+      "title": "Failures",
+      "type": "logs",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "${DS_CLOUDWATCH}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "${DS_CLOUDWATCH}"
+          },
+          "queryMode": "Logs",
+          "region": "eu-west-2",
+          "expression": "fields @timestamp, event, worker, transactionId, msg, err.message | filter event in [\"QUEUE_MESSAGE_FAILED\", \"PAYMENT_FAILED\", \"HTTP_ERROR\"] | sort @timestamp desc | limit 100",
+          "logGroups": [
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-api:*",
+              "name": "/aws/lambda/notif-system-$env-api"
+            },
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-email-worker:*",
+              "name": "/aws/lambda/notif-system-$env-email-worker"
+            },
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-sms-worker:*",
+              "name": "/aws/lambda/notif-system-$env-sms-worker"
+            },
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-order-worker:*",
+              "name": "/aws/lambda/notif-system-$env-order-worker"
+            }
+          ],
+          "statsGroups": []
+        }
+      ],
+      "gridPos": {
+        "x": 8,
+        "y": 24,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      }
+    },
+    {
+      "id": 12,
+      "title": "Event stream",
+      "type": "logs",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "${DS_CLOUDWATCH}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "${DS_CLOUDWATCH}"
+          },
+          "queryMode": "Logs",
+          "region": "eu-west-2",
+          "expression": "fields @timestamp, event, worker, transactionId, msg | filter ispresent(event) | sort @timestamp desc | limit 200",
+          "logGroups": [
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-api:*",
+              "name": "/aws/lambda/notif-system-$env-api"
+            },
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-email-worker:*",
+              "name": "/aws/lambda/notif-system-$env-email-worker"
+            },
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-sms-worker:*",
+              "name": "/aws/lambda/notif-system-$env-sms-worker"
+            },
+            {
+              "arn": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-$env-order-worker:*",
+              "name": "/aws/lambda/notif-system-$env-order-worker"
+            }
+          ],
+          "statsGroups": []
+        }
+      ],
+      "gridPos": {
+        "x": 16,
+        "y": 24,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      }
+    }
+  ]
+}
