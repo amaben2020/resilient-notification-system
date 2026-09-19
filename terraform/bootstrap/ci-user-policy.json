@@ -31,7 +31,12 @@
         "sqs:GetQueueUrl",
         "sqs:ListQueueTags",
         "sqs:TagQueue",
-        "sqs:UntagQueue"
+        "sqs:UntagQueue",
+        "sqs:ReceiveMessage",
+        "sqs:SendMessage",
+        "sqs:DeleteMessage",
+        "sqs:PurgeQueue",
+        "sqs:ChangeMessageVisibility"
       ],
       "Resource": "arn:aws:sqs:eu-west-2:006291942168:notif-system-*"
     },
