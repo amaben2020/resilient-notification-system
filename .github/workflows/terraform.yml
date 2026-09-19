@@ -91,3 +91,12 @@ jobs:
         run: |
           export PAYMENT_CONFIRMED_TOPIC_ARN=$(terraform -chdir=terraform output -raw payment_confirmed_topic_arn)
           npm run test:integration
+
+      # Same flow through the public URL: POST a payment, wait for the workers.
+      - name: Smoke test the public API URL
+        if: inputs.apply
+        working-directory: .
+        run: |
+          export API_URL=$(terraform -chdir=terraform output -raw api_url)
+          npm run smoke
+          echo "API: $API_URL" >> "$GITHUB_STEP_SUMMARY"

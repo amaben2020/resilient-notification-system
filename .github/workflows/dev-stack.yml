@@ -91,6 +91,8 @@ jobs:
           npm run db:migrate
           export PAYMENT_CONFIRMED_TOPIC_ARN=$(terraform -chdir=terraform output -raw payment_confirmed_topic_arn)
           npm run test:integration
+          export API_URL=$(terraform -chdir=terraform output -raw api_url)
+          npm run smoke
 
       - name: Terraform destroy
         if: inputs.action == 'down'

@@ -1,12 +1,17 @@
-// Bundles each worker (+ drizzle, neon driver, shared config) into one file.
-// Output: dist/<worker>/index.mjs  -> Terraform zips each dir into a Lambda.
+// Bundles each Lambda entry point (+ drizzle, neon driver, pino, shared config)
+// into one self-contained file. Output: dist/<name>/index.mjs -> Terraform zips it.
 import { build } from 'esbuild';
 
-const workers = ['email', 'sms', 'order'];
+const entries = {
+  email: 'src/features/workers/email/index.mjs',
+  sms: 'src/features/workers/sms/index.mjs',
+  order: 'src/features/workers/order/index.mjs',
+  api: 'src/api/index.mjs',
+};
 
-for (const name of workers) {
+for (const [name, entryPoint] of Object.entries(entries)) {
   await build({
-    entryPoints: [`src/features/workers/${name}/index.mjs`],
+    entryPoints: [entryPoint],
     bundle: true,
     platform: 'node',
     target: 'node20',
@@ -15,7 +20,7 @@ for (const name of workers) {
     minify: false,
     // Lambda logs are machine-read: always JSON, never the pretty transport.
     define: { 'process.env.LOG_FORMAT': '"json"' },
-    // CJS deps (pino) call require() at runtime; give the ESM bundle a real one.
+    // CJS deps (pino, express) call require() at runtime; give the ESM bundle a real one.
     banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
     logLevel: 'info',
   });
