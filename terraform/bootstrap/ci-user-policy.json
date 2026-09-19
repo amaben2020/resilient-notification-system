@@ -31,7 +31,12 @@
         "sqs:GetQueueUrl",
         "sqs:ListQueueTags",
         "sqs:TagQueue",
-        "sqs:UntagQueue"
+        "sqs:UntagQueue",
+        "sqs:ReceiveMessage",
+        "sqs:SendMessage",
+        "sqs:DeleteMessage",
+        "sqs:PurgeQueue",
+        "sqs:ChangeMessageVisibility"
       ],
       "Resource": "arn:aws:sqs:eu-west-2:006291942168:notif-system-*"
     },
@@ -50,7 +55,13 @@
         "lambda:GetPolicy",
         "lambda:ListTags",
         "lambda:TagResource",
-        "lambda:UntagResource"
+        "lambda:UntagResource",
+        "lambda:CreateFunctionUrlConfig",
+        "lambda:GetFunctionUrlConfig",
+        "lambda:UpdateFunctionUrlConfig",
+        "lambda:DeleteFunctionUrlConfig",
+        "lambda:AddPermission",
+        "lambda:RemovePermission"
       ],
       "Resource": "arn:aws:lambda:eu-west-2:006291942168:function:notif-system-*"
     },

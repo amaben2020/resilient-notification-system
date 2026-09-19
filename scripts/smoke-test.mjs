@@ -1,7 +1,7 @@
 // End-to-end check against real AWS: POST a payment, then poll until the
 // order worker has confirmed it and the email/sms workers have logged rows.
 // Usage: npm run smoke   (needs the API running: npm run dev)
-const base = process.env.API_URL || 'http://localhost:3300';
+const base = (process.env.API_URL || 'http://localhost:3300').replace(/\/$/, '');
 
 const res = await fetch(`${base}/api/payments`, {
   method: 'POST',

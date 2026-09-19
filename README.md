@@ -20,12 +20,14 @@ notif-system/
 │   ├── main.tf                        SNS, SQS(+DLQ), IAM, Lambda x3
 │   ├── variables.tf
 │   └── environments/
-│       ├── staging.tfvars / staging.backend.hcl
-│       └── prod.tfvars    / prod.backend.hcl
+│       ├── backend.hcl                shared S3 backend; state key passed per stack
+│       └── staging.tfvars / prod.tfvars
 └── .github/workflows/
     ├── terraform.yml                  reusable: build -> plan -> migrate -> apply
     ├── deploy-staging.yml             PR = plan, push to staging = apply
-    └── deploy-prod.yml                PR = plan, push to main/master = apply
+    ├── deploy-prod.yml                PR = plan, push to main/master = apply
+    ├── ci.yml                         feature branches: tests + validate, no AWS
+    └── dev-stack.yml                  manual: personal stack per developer (up/down)
 
 Local dev
   cp .env.example .env         # fill DATABASE_URL
@@ -37,5 +39,5 @@ Local dev
 
 Infra
   npm run build:workers
-  cd terraform && terraform init -backend-config=environments/staging.backend.hcl
+  cd terraform && terraform init -backend-config=environments/backend.hcl -backend-config="key=staging/terraform.tfstate"
   TF_VAR_database_url=... terraform plan -var-file=environments/staging.tfvars

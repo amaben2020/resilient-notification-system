@@ -6,6 +6,6 @@ export default defineConfig({
     include: ['tests/integration/**/*.test.js'],
     testTimeout: 90_000,
     hookTimeout: 30_000,
-    env: { LOG_LEVEL: 'silent' },
+    env: { LOG_LEVEL: 'silent', LOG_FORMAT: 'json' },
   },
 });
