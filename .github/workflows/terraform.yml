@@ -83,6 +83,9 @@ jobs:
           if [ -n '${{ secrets.GRAFANA_CLOUD_API_KEY }}' ]; then
             scripts/secrets.sh seed "$ENV_NAME" grafana-cloud-api-key '${{ secrets.GRAFANA_CLOUD_API_KEY }}'
           fi
+          if [ -n '${{ secrets.NEW_RELIC_LICENSE_KEY }}' ]; then
+            scripts/secrets.sh seed "$ENV_NAME" new-relic-license-key '${{ secrets.NEW_RELIC_LICENSE_KEY }}'
+          fi
 
       # Migrations read the SAME value the Lambdas will use.
       - name: Run DB migrations

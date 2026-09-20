@@ -145,10 +145,10 @@ resource "aws_lambda_function" "worker" {
   timeout          = 30
 
   environment {
-    variables = {
+    variables = merge(local.new_relic_env, {
       NODE_ENV   = var.environment
       SSM_PREFIX = local.ssm_prefix # secrets are fetched at cold start, never stored here
-    }
+    })
   }
 }
 
