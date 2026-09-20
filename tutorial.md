@@ -359,7 +359,50 @@ For local plans without the bucket, `terraform/backend_override.tf`
 (gitignored) swaps in `backend "local" {}`. Terraform merges any
 `*_override.tf` file last.
 
-### 4.4 Bootstrap: the chicken-and-egg part
+### 4.4 Secrets: SSM Parameter Store, values set out of band
+
+Secrets never live in the repo, in tfvars, in Terraform state or in the Lambda
+console. The pattern has three parts:
+
+```mermaid
+sequenceDiagram
+    participant TF as Terraform (CI)
+    participant SSM as SSM Parameter Store
+    participant You as you / CI seed
+    participant L as Lambda (cold start)
+
+    TF->>SSM: create /notif-system/staging/database-url = "PLACEHOLDER" (SecureString)
+    Note over TF,SSM: lifecycle { ignore_changes = [value] }
+    You->>SSM: scripts/secrets.sh put staging database-url <real value>
+    L->>SSM: GetParametersByPath(/notif-system/staging, WithDecryption)
+    SSM-->>L: database-url, grafana-cloud-api-key
+    Note over L: process.env.DATABASE_URL set, then neon() client created
+```
+
+1. **Terraform owns existence, not value** (`terraform/secrets.tf`).
+   `aws_ssm_parameter.secret` is created with `value = "PLACEHOLDER"` and
+   `ignore_changes = [value]`, so a later `put-parameter --overwrite` is never
+   reverted by the next apply. The exec roles get `ssm:GetParameter*` on the
+   environment's prefix only: staging Lambdas cannot read prod secrets.
+2. **Humans set values** with `scripts/secrets.sh put <env> <name> <value>`.
+   CI runs `secrets.sh seed` after the first apply, which writes the GitHub
+   secret *only if the parameter is still PLACEHOLDER*. From then on SSM is
+   the source of truth; rotating a password is one `put` and no deploy.
+3. **Lambdas load at cold start** (`src/config/secrets.js`): every parameter
+   under `SSM_PREFIX` becomes an env var (`database-url` -> `DATABASE_URL`).
+   `db.js` awaits this before creating the client. Locally `SSM_PREFIX` is
+   unset and `.env` is used, unchanged.
+
+What this buys you, in interview terms: one place to rotate, per-environment
+isolation enforced by IAM (not by convention), an audit trail
+(`ssm:GetParameterHistory`), encryption at rest with KMS, and Terraform plans
+that never print a secret because Terraform never sees one.
+
+Cost: SSM standard parameters are free; `GetParametersByPath` calls are free.
+The next step up is AWS Secrets Manager ($0.40/secret/month) when you need
+automatic rotation with a Lambda rotator, e.g. for RDS credentials.
+
+### 4.5 Bootstrap: the chicken-and-egg part
 
 Terraform cannot create the bucket its own state lives in, nor grant itself
 permissions. `terraform/bootstrap/README` holds the one-time commands:

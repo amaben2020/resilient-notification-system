@@ -56,8 +56,8 @@ resource "aws_lambda_function" "api" {
   environment {
     variables = {
       NODE_ENV                    = var.environment
-      DATABASE_URL                = var.database_url
-      PAYMENT_CONFIRMED_TOPIC_ARN = aws_sns_topic.payment_confirmed.arn
+      SSM_PREFIX                  = local.ssm_prefix
+      PAYMENT_CONFIRMED_TOPIC_ARN = aws_sns_topic.payment_confirmed.arn # not a secret
     }
   }
 }
