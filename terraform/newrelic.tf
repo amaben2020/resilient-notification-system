@@ -16,9 +16,9 @@ locals {
   new_relic_layer_arn = "arn:aws:lambda:${var.aws_region}:451483290750:layer:NewRelicNodeJS20X:125"
 
   new_relic_env = var.new_relic_enabled ? {
-    NEW_RELIC_LAMBDA_HANDLER                 = "index.handler" # the real handler; the layer's wrapper calls it
-    NEW_RELIC_USE_ESM                        = "true"          # our bundles are index.mjs
-    NODE_OPTIONS                             = "--experimental-loader newrelic/esm-loader.mjs"
+    NEW_RELIC_LAMBDA_HANDLER                 = "index.handler"                                                          # the real handler; the layer's wrapper calls it
+    NEW_RELIC_USE_ESM                        = "true"                                                                   # our bundles are index.mjs
+    NODE_OPTIONS                             = "--experimental-loader /opt/nodejs/node_modules/newrelic/esm-loader.mjs" # absolute: ESM resolution ignores NODE_PATH, so the bare package name fails
     NEW_RELIC_ACCOUNT_ID                     = var.new_relic_account_id
     NEW_RELIC_LICENSE_KEY_SSM_PARAMETER_NAME = aws_ssm_parameter.secret["new-relic-license-key"].name
     NEW_RELIC_DISTRIBUTED_TRACING_ENABLED    = "true"

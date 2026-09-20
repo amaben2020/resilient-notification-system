@@ -148,6 +148,12 @@
         "iam:DeleteRolePolicy"
       ],
       "Resource": "arn:aws:iam::006291942168:role/notif-system-*"
+    },
+    {
+      "Sid": "NewRelicLayer",
+      "Effect": "Allow",
+      "Action": "lambda:GetLayerVersion",
+      "Resource": "arn:aws:lambda:eu-west-2:451483290750:layer:NewRelicNodeJS20X*:*"
     }
   ]
 }
