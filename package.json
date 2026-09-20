@@ -21,6 +21,7 @@
   "license": "ISC",
   "dependencies": {
     "@aws-sdk/client-sns": "^3.1135.0",
+    "@aws-sdk/client-ssm": "^3.1136.0",
     "@neondatabase/serverless": "^1.1.0",
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",

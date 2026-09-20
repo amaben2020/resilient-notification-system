@@ -1,0 +1,24 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadNotifSystemLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:StartQuery", "logs:StopQuery", "logs:GetQueryResults",
+        "logs:FilterLogEvents", "logs:GetLogEvents", "logs:DescribeLogStreams", "logs:GetLogGroupFields"
+      ],
+      "Resource": "arn:aws:logs:eu-west-2:006291942168:log-group:/aws/lambda/notif-system-*:*"
+    },
+    {
+      "Sid": "DiscoverLogGroupsAndMetrics",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DescribeLogGroups", "logs:DescribeQueries",
+        "cloudwatch:ListMetrics", "cloudwatch:GetMetricData", "cloudwatch:GetMetricStatistics", "cloudwatch:DescribeAlarms",
+        "tag:GetResources", "ec2:DescribeRegions"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

@@ -104,7 +104,7 @@ Everything is Terraform-managed. To remove an environment:
 npm run build:workers
 cd terraform
 terraform init -backend-config=environments/backend.hcl -backend-config="key=prod/terraform.tfstate"
-TF_VAR_database_url=unused terraform destroy -var-file=environments/prod.tfvars
+terraform destroy -var-file=environments/prod.tfvars
 ```
 
 Re-creating it is a push to the branch. Dev stacks are removed with the workflow's `action=down`.

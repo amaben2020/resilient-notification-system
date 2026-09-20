@@ -2,7 +2,7 @@
 // Fill the two placeholders from Grafana Cloud -> your stack -> Prometheus -> "Send metrics".
 // The API key is read from the environment (populate it from SSM at boot):
 //   export GRAFANA_CLOUD_API_KEY=$(aws ssm get-parameter --with-decryption \
-//     --name /notif-system-staging/grafana-cloud-api-key --query Parameter.Value --output text)
+//     --name /notif-system/staging/grafana-cloud-api-key --query Parameter.Value --output text)
 
 prometheus.scrape "notif_api" {
   targets    = [{ __address__ = "localhost:3300" }]

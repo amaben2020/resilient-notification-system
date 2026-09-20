@@ -146,8 +146,8 @@ resource "aws_lambda_function" "worker" {
 
   environment {
     variables = {
-      NODE_ENV     = var.environment
-      DATABASE_URL = var.database_url
+      NODE_ENV   = var.environment
+      SSM_PREFIX = local.ssm_prefix # secrets are fetched at cold start, never stored here
     }
   }
 }

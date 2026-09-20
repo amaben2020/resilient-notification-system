@@ -97,9 +97,14 @@
         "ssm:DeleteParameter",
         "ssm:AddTagsToResource",
         "ssm:RemoveTagsFromResource",
-        "ssm:ListTagsForResource"
+        "ssm:ListTagsForResource",
+        "ssm:GetParametersByPath",
+        "ssm:GetParameterHistory"
       ],
-      "Resource": "arn:aws:ssm:eu-west-2:006291942168:parameter/notif-system-*"
+      "Resource": [
+        "arn:aws:ssm:eu-west-2:006291942168:parameter/notif-system-*",
+        "arn:aws:ssm:eu-west-2:006291942168:parameter/notif-system/*"
+      ]
     },
     {
       "Sid": "SsmDescribe",
@@ -133,6 +138,16 @@
         "sns:ListSubscriptions"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "IamPolicyDocsForRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy"
+      ],
+      "Resource": "arn:aws:iam::006291942168:role/notif-system-*"
     }
   ]
 }

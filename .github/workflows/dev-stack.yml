@@ -72,8 +72,6 @@ jobs:
       - name: Terraform apply
         if: inputs.action == 'up'
         working-directory: terraform
-        env:
-          TF_VAR_database_url: ${{ steps.db.outputs.url }}
         run: |
           terraform apply -auto-approve -var="environment=${STACK}"
           {
@@ -83,11 +81,11 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Migrate + integration test against this stack
+      - name: Seed this stack's secrets, migrate, integration test
         if: inputs.action == 'up'
-        env:
-          DATABASE_URL: ${{ steps.db.outputs.url }}
         run: |
+          scripts/secrets.sh seed "$STACK" database-url '${{ steps.db.outputs.url }}'
+          export DATABASE_URL=$(scripts/secrets.sh get "$STACK" database-url)
           npm run db:migrate
           export PAYMENT_CONFIRMED_TOPIC_ARN=$(terraform -chdir=terraform output -raw payment_confirmed_topic_arn)
           npm run test:integration
@@ -97,8 +95,6 @@ jobs:
       - name: Terraform destroy
         if: inputs.action == 'down'
         working-directory: terraform
-        env:
-          TF_VAR_database_url: unused
         run: terraform destroy -auto-approve -var="environment=${STACK}"
 
       - name: Delete Neon branch
