@@ -73,7 +73,7 @@ jobs:
         if: inputs.action == 'up'
         working-directory: terraform
         run: |
-          terraform apply -auto-approve -var="environment=${STACK}"
+          terraform apply -auto-approve -var="environment=${STACK}" -var="new_relic_account_id=8533024"
           {
             echo "### Stack \`${STACK}\`"
             echo '```'
@@ -85,6 +85,9 @@ jobs:
         if: inputs.action == 'up'
         run: |
           scripts/secrets.sh seed "$STACK" database-url '${{ steps.db.outputs.url }}'
+          if [ -n '${{ secrets.NEW_RELIC_LICENSE_KEY }}' ]; then
+            scripts/secrets.sh seed "$STACK" new-relic-license-key '${{ secrets.NEW_RELIC_LICENSE_KEY }}'
+          fi
           export DATABASE_URL=$(scripts/secrets.sh get "$STACK" database-url)
           npm run db:migrate
           export PAYMENT_CONFIRMED_TOPIC_ARN=$(terraform -chdir=terraform output -raw payment_confirmed_topic_arn)

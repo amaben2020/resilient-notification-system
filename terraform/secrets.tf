@@ -9,7 +9,7 @@
 
 locals {
   ssm_prefix = "/${var.project_name}/${var.environment}"
-  secrets    = ["database-url", "grafana-cloud-api-key"]
+  secrets    = ["database-url", "grafana-cloud-api-key", "new-relic-license-key"]
 }
 
 resource "aws_ssm_parameter" "secret" {
