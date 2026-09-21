@@ -4,6 +4,7 @@ import request from 'supertest';
 vi.mock('../../src/features/payment-service/payment.repository.js', () => ({
   insertTransaction: vi.fn(async (t) => ({ id: 1, status: 'pending', createdAt: new Date(), ...t })),
   findTransaction: vi.fn(),
+  summarizeTransactions: vi.fn(async () => ({ total: 3, confirmed: 3, notifications: 6 })),
 }));
 vi.mock('@aws-sdk/client-sns', () => ({
   SNSClient: class { send = vi.fn(); },
@@ -14,6 +15,30 @@ import app from '../../app.js';
 import { findTransaction, insertTransaction } from '../../src/features/payment-service/payment.repository.js';
 
 beforeEach(() => vi.clearAllMocks());
+
+describe('hardening', () => {
+  it('sends no server fingerprint and sets security headers', async () => {
+    const res = await request(app).get('/health');
+    expect(res.headers['x-powered-by']).toBeUndefined();
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+  });
+  it('rejects oversized bodies with 413', async () => {
+    const res = await request(app).post('/api/payments').set('content-type', 'application/json').send({ userId: 'x'.repeat(20_000), amount: 1 });
+    expect(res.status).toBe(413);
+  });
+  it('rejects malformed JSON with 400, not 500', async () => {
+    const res = await request(app).post('/api/payments').set('content-type', 'application/json').send('{"userId": ');
+    expect(res.status).toBe(400);
+  });
+  it.each([[2147483648], [1e308], [Number.MAX_SAFE_INTEGER + 1]])('rejects out-of-range amount %s with 400', async (amount) => {
+    const res = await request(app).post('/api/payments').send({ userId: 'u', amount });
+    expect(res.status).toBe(400);
+  });
+  it('rejects a 65-char userId', async () => {
+    const res = await request(app).post('/api/payments').send({ userId: 'u'.repeat(65), amount: 1 });
+    expect(res.status).toBe(400);
+  });
+});
 
 describe('GET /health', () => {
   it('returns ok', async () => {
@@ -42,7 +67,7 @@ describe('POST /api/payments', () => {
     vi.mocked(insertTransaction).mockRejectedValueOnce(new Error('boom'));
     const res = await request(app).post('/api/payments').send({ userId: 'u_1', amount: 1 });
     expect(res.status).toBe(500);
-    expect(res.body).toEqual({ error: 'boom' });
+    expect(res.body).toEqual({ error: 'Internal Server Error' }); // internals never leak
   });
 });
 
@@ -60,6 +85,17 @@ describe('GET /api/payments/:transactionId', () => {
     const res = await request(app).get('/api/payments/txn_1');
     expect(res.status).toBe(200);
     expect(res.body.notifications).toHaveLength(2);
+  });
+});
+
+describe('GET /api/payments/stats', () => {
+  it('400 without a usable prefix', async () => {
+    expect((await request(app).get('/api/payments/stats')).status).toBe(400);
+  });
+  it('returns totals for the prefix', async () => {
+    const res = await request(app).get('/api/payments/stats?userPrefix=k6_');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ total: 3, confirmed: 3, notifications: 6 });
   });
 });
 

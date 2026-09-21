@@ -46,19 +46,20 @@ resource "aws_iam_role_policy" "api_policy" {
 resource "aws_lambda_function" "api" {
   function_name    = "${local.name_prefix}-api"
   role             = aws_iam_role.api_exec_role.arn
-  handler          = "index.handler"
+  handler          = local.lambda_handler
+  layers           = local.lambda_layers
   runtime          = "nodejs20.x"
   filename         = data.archive_file.api.output_path
   source_code_hash = data.archive_file.api.output_base64sha256
   timeout          = 30
-  memory_size      = 256
+  memory_size      = 512 # load test: 223 of 244 MB used with the agent attached
 
   environment {
-    variables = {
+    variables = merge(local.new_relic_env, {
       NODE_ENV                    = var.environment
-      DATABASE_URL                = var.database_url
-      PAYMENT_CONFIRMED_TOPIC_ARN = aws_sns_topic.payment_confirmed.arn
-    }
+      SSM_PREFIX                  = local.ssm_prefix
+      PAYMENT_CONFIRMED_TOPIC_ARN = aws_sns_topic.payment_confirmed.arn # not a secret
+    })
   }
 }
 

@@ -28,8 +28,7 @@ jobs:
     env:
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
-      TF_VAR_database_url: ${{ secrets.DATABASE_URL }}
-      TF_VAR_grafana_cloud_api_key: ${{ secrets.GRAFANA_CLOUD_API_KEY }}
+      ENV_NAME: ${{ inputs.environment }}
 
     steps:
       - uses: actions/checkout@v4
@@ -69,26 +68,40 @@ jobs:
       - name: Terraform plan
         run: terraform plan -var-file=environments/${{ inputs.environment }}.tfvars -out=tfplan
 
-      # Schema first, so the new Lambda code never runs against missing tables.
-      - name: Run DB migrations
-        if: inputs.apply
-        working-directory: .
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npm run db:migrate
-
       - name: Terraform apply
         if: inputs.apply
         run: terraform apply tfplan
+
+      # Terraform created the SSM parameters as PLACEHOLDER. Seed them from GitHub
+      # secrets the first time only; after that SSM is the source of truth and
+      # rotation happens with `scripts/secrets.sh put` - never overwritten here.
+      - name: Seed SSM secrets (first deploy only)
+        if: inputs.apply
+        working-directory: .
+        run: |
+          scripts/secrets.sh seed "$ENV_NAME" database-url '${{ secrets.DATABASE_URL }}'
+          if [ -n '${{ secrets.GRAFANA_CLOUD_API_KEY }}' ]; then
+            scripts/secrets.sh seed "$ENV_NAME" grafana-cloud-api-key '${{ secrets.GRAFANA_CLOUD_API_KEY }}'
+          fi
+          if [ -n '${{ secrets.NEW_RELIC_LICENSE_KEY }}' ]; then
+            scripts/secrets.sh seed "$ENV_NAME" new-relic-license-key '${{ secrets.NEW_RELIC_LICENSE_KEY }}'
+          fi
+
+      # Migrations read the SAME value the Lambdas will use.
+      - name: Run DB migrations
+        if: inputs.apply
+        working-directory: .
+        run: |
+          export DATABASE_URL=$(scripts/secrets.sh get "$ENV_NAME" database-url)
+          npm run db:migrate
 
       # Post-deploy check against the real stack: publish to the topic, assert
       # all three workers processed it (see tests/integration/fanout.test.js).
       - name: Integration test (fan-out through real SNS/SQS/Lambda)
         if: inputs.apply
         working-directory: .
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
+          export DATABASE_URL=$(scripts/secrets.sh get "$ENV_NAME" database-url)
           export PAYMENT_CONFIRMED_TOPIC_ARN=$(terraform -chdir=terraform output -raw payment_confirmed_topic_arn)
           npm run test:integration
 
@@ -100,3 +113,8 @@ jobs:
           export API_URL=$(terraform -chdir=terraform output -raw api_url)
           npm run smoke
           echo "API: $API_URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Abuse checks against the public API URL
+        if: inputs.apply
+        working-directory: .
+        run: node pentest/abuse-checks.mjs "$(terraform -chdir=terraform output -raw api_url)"

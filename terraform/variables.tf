@@ -17,15 +17,16 @@ variable "aws_region" {
   type    = string
   default = "eu-west-2"
 }
-variable "database_url" {
-  type        = string
-  description = "Neon Postgres connection string, injected into each Lambda. Pass via TF_VAR_database_url."
-  sensitive   = true
+
+
+variable "new_relic_enabled" {
+  type        = bool
+  description = "Attach the New Relic layer + extension to every Lambda"
+  default     = true
 }
 
-variable "grafana_cloud_api_key" {
+variable "new_relic_account_id" {
   type        = string
-  description = "Grafana Cloud API key. Optional: SSM parameter is only created when set."
-  sensitive   = true
+  description = "New Relic account ID (not a secret). The license key lives in SSM."
   default     = ""
 }

@@ -359,7 +359,50 @@ For local plans without the bucket, `terraform/backend_override.tf`
 (gitignored) swaps in `backend "local" {}`. Terraform merges any
 `*_override.tf` file last.
 
-### 4.4 Bootstrap: the chicken-and-egg part
+### 4.4 Secrets: SSM Parameter Store, values set out of band
+
+Secrets never live in the repo, in tfvars, in Terraform state or in the Lambda
+console. The pattern has three parts:
+
+```mermaid
+sequenceDiagram
+    participant TF as Terraform (CI)
+    participant SSM as SSM Parameter Store
+    participant You as you / CI seed
+    participant L as Lambda (cold start)
+
+    TF->>SSM: create /notif-system/staging/database-url = "PLACEHOLDER" (SecureString)
+    Note over TF,SSM: lifecycle { ignore_changes = [value] }
+    You->>SSM: scripts/secrets.sh put staging database-url <real value>
+    L->>SSM: GetParametersByPath(/notif-system/staging, WithDecryption)
+    SSM-->>L: database-url, grafana-cloud-api-key
+    Note over L: process.env.DATABASE_URL set, then neon() client created
+```
+
+1. **Terraform owns existence, not value** (`terraform/secrets.tf`).
+   `aws_ssm_parameter.secret` is created with `value = "PLACEHOLDER"` and
+   `ignore_changes = [value]`, so a later `put-parameter --overwrite` is never
+   reverted by the next apply. The exec roles get `ssm:GetParameter*` on the
+   environment's prefix only: staging Lambdas cannot read prod secrets.
+2. **Humans set values** with `scripts/secrets.sh put <env> <name> <value>`.
+   CI runs `secrets.sh seed` after the first apply, which writes the GitHub
+   secret *only if the parameter is still PLACEHOLDER*. From then on SSM is
+   the source of truth; rotating a password is one `put` and no deploy.
+3. **Lambdas load at cold start** (`src/config/secrets.js`): every parameter
+   under `SSM_PREFIX` becomes an env var (`database-url` -> `DATABASE_URL`).
+   `db.js` awaits this before creating the client. Locally `SSM_PREFIX` is
+   unset and `.env` is used, unchanged.
+
+What this buys you, in interview terms: one place to rotate, per-environment
+isolation enforced by IAM (not by convention), an audit trail
+(`ssm:GetParameterHistory`), encryption at rest with KMS, and Terraform plans
+that never print a secret because Terraform never sees one.
+
+Cost: SSM standard parameters are free; `GetParametersByPath` calls are free.
+The next step up is AWS Secrets Manager ($0.40/secret/month) when you need
+automatic rotation with a Lambda rotator, e.g. for RDS credentials.
+
+### 4.5 Bootstrap: the chicken-and-egg part
 
 Terraform cannot create the bucket its own state lives in, nor grant itself
 permissions. `terraform/bootstrap/README` holds the one-time commands:
@@ -546,6 +589,117 @@ Terraform reads any `TF_VAR_<name>` environment variable as the variable
 
 ---
 
+### 3.7 Reading the logs in Grafana
+
+Lambda writes stdout to CloudWatch Logs, one log group per function. Rather
+than shipping those somewhere, Grafana Cloud queries them in place through its
+**CloudWatch data source**, which also exposes the Lambda metrics AWS already
+collects (invocations, errors, duration, throttles).
+
+```mermaid
+flowchart LR
+    L1[λ api] --> CW[CloudWatch Logs<br/>7 log groups]
+    L2[λ email/sms/order] --> CW
+    L3[λ ...] --> CWM[CloudWatch Metrics<br/>AWS/Lambda, AWS/SQS]
+    CW -->|Logs Insights| G[Grafana Cloud<br/>CloudWatch data source]
+    CWM -->|GetMetricData| G
+    IAM[IAM user grafana-cloudwatch<br/>read-only, notif-system-* log groups] -.credentials.-> G
+```
+
+Setup (once): create the read-only IAM user (bootstrap README step 4), then in
+Grafana: **Connections -> Data sources -> Add -> CloudWatch**, authentication
+"Access & secret key", default region `eu-west-2`, Save & test.
+
+Queries that pay off (Explore -> CloudWatch -> Logs, pick the
+`/aws/lambda/notif-system-staging-*` log groups):
+
+```
+# everything that happened, newest first
+fields @timestamp, event, worker, transactionId, msg
+| filter ispresent(event)
+| sort @timestamp desc
+
+# one payment across API and all three workers
+fields @timestamp, event, worker, msg
+| filter transactionId = "txn_..."
+| sort @timestamp asc
+
+# failures only
+fields @timestamp, event, worker, transactionId, msg, err.message
+| filter event in ["QUEUE_MESSAGE_FAILED", "PAYMENT_FAILED", "HTTP_ERROR"]
+
+# throughput per worker per 5 minutes
+stats count() by bin(5m), worker
+| filter event in ["EMAIL_SENT", "SMS_SENT", "ORDER_CONFIRMED"]
+```
+
+Because every line is JSON, CloudWatch indexes the fields automatically:
+`event`, `worker`, `transactionId` are queryable without any parsing rules.
+That is the concrete return on structured logging.
+
+**Dashboard.** `observability/grafana-dashboard.json` is importable
+(Dashboards -> New -> Import -> upload, pick the CloudWatch data source). It has
+an `env` switch (staging / prod) and three rows:
+
+| Row | Panels | Source |
+|---|---|---|
+| Lambda | invocations, errors, duration p95, concurrency, throttles, **max memory used** | `AWS/Lambda` metrics; memory is parsed from the `REPORT` line of every invocation (`@maxMemoryUsed`), no agent needed |
+| SQS | age of oldest message, sent/received/deleted, **DLQ depth** | `AWS/SQS` metrics |
+| Logs | events per worker, failures, live event stream | Logs Insights on the four log groups |
+
+There is no CPU metric for Lambda: nothing is running between invocations.
+Lambda Insights (an extension layer) adds CPU/network/memory utilisation but
+bills ~8 custom metrics per function, which is not worth it at this size.
+
+For metrics (Explore -> CloudWatch -> Metrics): namespace `AWS/Lambda`,
+metric `Errors` or `Duration`, dimension `FunctionName`; namespace `AWS/SQS`,
+metric `ApproximateAgeOfOldestMessage` per queue is the one to alert on (a
+rising value means a consumer is broken or falling behind), and
+`ApproximateNumberOfMessagesVisible` on the `-dlq` queues should stay at 0.
+
+### 3.8 APM with New Relic (traces, memory, logs)
+
+Grafana/CloudWatch answer "what happened". APM answers "where did the time
+go inside one request" and "which downstream call failed". New Relic is added
+without touching function code, via the official Lambda layer:
+
+```mermaid
+flowchart LR
+    subgraph lambda["Lambda container"]
+        W[newrelic-lambda-wrapper.handler] -->|import index.mjs| H[your handler]
+        H -->|spans: SNS publish, SSM fetch,<br/>Neon HTTPS calls| A[Node agent<br/>in the layer]
+        A -->|local pipe| X[extension process]
+        X -->|reads key once| SSM[(SSM /notif-system/env/<br/>new-relic-license-key)]
+    end
+    X -->|traces, invocation metrics,<br/>function logs| NR[New Relic]
+```
+
+| Piece | Terraform (`newrelic.tf`) | Effect |
+|---|---|---|
+| Layer `NewRelicNodeJS20X` | `layers = [...]` on every function | ships agent + extension |
+| Handler swap | `handler = "newrelic-lambda-wrapper.handler"`, `NEW_RELIC_LAMBDA_HANDLER = "index.handler"` | wrapper records the invocation as a transaction, then calls yours |
+| ESM | `NEW_RELIC_USE_ESM = "true"`, `NODE_OPTIONS = "--experimental-loader /opt/nodejs/node_modules/newrelic/esm-loader.mjs"` | our bundles are `.mjs`; the loader path must be absolute (see failure 15) |
+| Key | `NEW_RELIC_LICENSE_KEY_SSM_PARAMETER_NAME` -> the SSM slot from 4.4 | key never in env vars or state |
+| Logs | `NEW_RELIC_EXTENSION_SEND_FUNCTION_LOGS = "true"` | pino JSON lines arrive in New Relic Logs linked to their trace |
+| Off switch | `new_relic_enabled = false` in tfvars | removes layer and every `NEW_RELIC_*` variable |
+| Bundling | esbuild `external: ['@aws-sdk/*']` | the runtime ships SDK v3; the agent can only instrument modules it sees imported, not inlined code |
+
+What you get: per-function throughput, error rate, duration percentiles,
+**memory used vs allocated** and cold starts (from the platform report);
+**distributed traces** API -> SNS -> SQS -> worker as one trace; logs in
+context. There is no CPU metric for Lambda; Duration is the proxy (CPU share
+scales with `memory_size`).
+
+**Fail-safe.** The agent is fire-and-forget: a missing, expired or wrong
+license key means telemetry is dropped and the extension logs a warning; the
+handler still runs. This was verified by deploying with the SSM parameter still
+at `PLACEHOLDER`: every function served traffic, the integration and smoke
+tests passed. What is *not* covered by that guarantee is broken agent wiring
+(wrong loader path, missing layer): that fails at Node boot, before any code
+runs. The pipeline is the protection there: staging went red twice (failures
+15 and 16), prod was never touched, and the messages that failed sat in the
+DLQs until they were redriven after the fix.
+
 ## 6. Testing
 
 ```mermaid
@@ -628,10 +782,21 @@ symptom -> cause mapping is most of the job.
 | 10 | `lambda:ListTags on event-source-mapping:...` denied after functions created | Event source mappings have their own ARN shape, not `function:` | Add statement for `event-source-mapping:*` |
 | 11 | Console shows nothing in eu-west-2 | `List*` APIs cannot be resource-scoped; policy had none | Read-only `ListFunctions`/`ListQueues`/`ListTopics` on `*` |
 | 12 | Bundled worker: `Dynamic require of "node:os" is not supported` | pino is CJS, esbuild ESM output has no `require` | `createRequire` banner in esbuild config |
+| 14 | `lambda:GetLayerVersion` denied on `arn:aws:lambda:eu-west-2:451483290750:layer:...` | The New Relic layer lives in New Relic's AWS account; scoping to `notif-system-*` can never match it | Explicit statement for that layer ARN |
+| 15 | Every cold start: `Cannot find package 'newrelic' imported from /var/task/` | ESM resolution ignores `NODE_PATH`, so `--experimental-loader newrelic/esm-loader.mjs` cannot see `/opt/nodejs/node_modules` | Absolute loader path |
+| 16 | Workers still crashing, `Layers: null` although apply said "changed" | A scripted edit matched `api.tf`'s alignment but not `main.tf`'s, so workers got `NODE_OPTIONS` without the layer | Fix the block; lesson: grep the result, don't trust the replace |
 | 13 | Public Function URL returns `403 Forbidden` with a correct-looking policy | Since Oct 2025 auth-NONE URLs need **two** statements: `InvokeFunctionUrl` and `InvokeFunction` (condition `InvokedViaFunctionUrl`); provider 5.x could not express the second | Upgrade `hashicorp/aws` to `~> 6.0`, add second `aws_lambda_permission` |
 
 The pattern behind 7-11: read the `AccessDenied` message literally. It names
 the exact action and the exact resource ARN to add.
+
+### Dead-letter queues did their job
+
+Failures 15 and 16 killed every worker invocation for about twenty minutes.
+Two integration-test payments were published during that window. SQS retried
+each three times, then moved them to the DLQs. After the fix, one
+`StartMessageMoveTask` per DLQ replayed them and both ended `confirmed` with
+their notification rows. Nothing was lost and nothing had to be re-sent.
 
 ### Partial applies are fine
 

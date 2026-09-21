@@ -20,6 +20,12 @@ One-time setup that Terraform itself cannot do (chicken-and-egg):
    NEON_API_KEY      https://console.neon.tech -> Account settings -> API keys
    NEON_PROJECT_ID   https://console.neon.tech -> project -> Settings -> General
 
-4. Updating the policy later (IAM keeps up to 5 versions; delete an old one if that limit hits)
+4. Read-only IAM user for the Grafana Cloud "CloudWatch" data source (logs + Lambda metrics)
+   aws iam create-user --user-name grafana-cloudwatch
+   aws iam put-user-policy --user-name grafana-cloudwatch --policy-name NotifSystemCloudWatchReadOnly \
+     --policy-document file://terraform/bootstrap/grafana-cloudwatch-policy.json
+   aws iam create-access-key --user-name grafana-cloudwatch     # paste into Grafana, never into the repo
+
+5. Updating the policy later (IAM keeps up to 5 versions; delete an old one if that limit hits)
    aws iam create-policy-version --policy-arn arn:aws:iam::$ACCT:policy/NotifSystemTerraform \
      --policy-document file://terraform/bootstrap/ci-user-policy.json --set-as-default

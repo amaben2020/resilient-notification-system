@@ -1,0 +1,35 @@
+# Dynamic application security testing (DAST) against the STAGING URL.
+#   - OWASP ZAP baseline: passive scan of every response for missing headers,
+#     information leaks, cookie flags, etc. Produces an HTML report artifact.
+#   - pentest/abuse-checks.mjs: our own hostile-input probes (must all pass).
+# Runs weekly and on demand. Deploy workflows also run the abuse checks after
+# every apply, so a regression fails the pipeline before it reaches prod.
+name: Security scan
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+
+jobs:
+  dast:
+    runs-on: ubuntu-latest
+    env:
+      TARGET: https://x57uwocfqijsvt6vau7w6d4q7q0msajh.lambda-url.eu-west-2.on.aws
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Abuse checks (hostile input, method tampering, leaks)
+        run: node pentest/abuse-checks.mjs "$TARGET"
+
+      - name: OWASP ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: ${{ env.TARGET }}
+          rules_file_name: pentest/zap-rules.tsv
+          cmd_options: "-a" # include the alpha passive rules
+          allow_issue_writing: false # report as artifact only, no GitHub issues
+          fail_action: false # WARN findings do not fail the run; review the report

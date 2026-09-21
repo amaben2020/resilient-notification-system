@@ -22,7 +22,10 @@ describe('validateCreatePayment', () => {
     [{ userId: 'u', amount: -5 }, 'amount'],
     [{ userId: 'u', amount: 12.5 }, 'amount'],
     [{ userId: 'u', amount: '100' }, 'amount'],
-    [undefined, 'userId'],
+    [undefined, 'body'],
+    [[1, 2], 'body'],
+    [{ userId: 'u'.repeat(65), amount: 1 }, 'userId'],
+    [{ userId: 'u', amount: 2147483648 }, 'amount'],
   ])('rejects %j with 400 mentioning %s', (body, field) => {
     const { res, next } = run(body);
     expect(next).not.toHaveBeenCalled();

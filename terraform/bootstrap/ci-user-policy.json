@@ -36,7 +36,10 @@
         "sqs:SendMessage",
         "sqs:DeleteMessage",
         "sqs:PurgeQueue",
-        "sqs:ChangeMessageVisibility"
+        "sqs:ChangeMessageVisibility",
+        "sqs:StartMessageMoveTask",
+        "sqs:ListMessageMoveTasks",
+        "sqs:CancelMessageMoveTask"
       ],
       "Resource": "arn:aws:sqs:eu-west-2:006291942168:notif-system-*"
     },
@@ -97,9 +100,14 @@
         "ssm:DeleteParameter",
         "ssm:AddTagsToResource",
         "ssm:RemoveTagsFromResource",
-        "ssm:ListTagsForResource"
+        "ssm:ListTagsForResource",
+        "ssm:GetParametersByPath",
+        "ssm:GetParameterHistory"
       ],
-      "Resource": "arn:aws:ssm:eu-west-2:006291942168:parameter/notif-system-*"
+      "Resource": [
+        "arn:aws:ssm:eu-west-2:006291942168:parameter/notif-system-*",
+        "arn:aws:ssm:eu-west-2:006291942168:parameter/notif-system/*"
+      ]
     },
     {
       "Sid": "SsmDescribe",
@@ -133,6 +141,22 @@
         "sns:ListSubscriptions"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "IamPolicyDocsForRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy"
+      ],
+      "Resource": "arn:aws:iam::006291942168:role/notif-system-*"
+    },
+    {
+      "Sid": "NewRelicLayer",
+      "Effect": "Allow",
+      "Action": "lambda:GetLayerVersion",
+      "Resource": "arn:aws:lambda:eu-west-2:451483290750:layer:NewRelicNodeJS20X*:*"
     }
   ]
 }
