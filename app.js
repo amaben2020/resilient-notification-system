@@ -1,9 +1,13 @@
 import express from 'express';
+import helmet from 'helmet';
 import paymentRoutes from './src/features/payment-service/payment.route.js';
 import { register } from './src/observability/metrics.js';
 import { logger } from './src/observability/logger.js';
 
 const app = express();
+
+app.disable('x-powered-by'); // no server fingerprint
+app.use(helmet()); // standard security headers (nosniff, no-referrer, HSTS, ...)
 
 // One line per request: method, path, status, duration. Probes are skipped.
 app.use((req, res, next) => {
@@ -17,7 +21,7 @@ app.use((req, res, next) => {
   });
   next();
 });
-app.use(express.json());
+app.use(express.json({ limit: '10kb' })); // a payment is ~60 bytes; anything big is abuse
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
@@ -30,10 +34,10 @@ app.use('/api/payments', paymentRoutes);
 
 // global middleware for error handling
 app.use((err, req, res, next) => {
-  logger.error({ event: 'HTTP_ERROR', err, method: req.method, path: req.originalUrl }, err.message);
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal Server Pipeline Error',
-  });
+  const status = err.status || err.statusCode || 500;
+  logger.error({ event: 'HTTP_ERROR', err, method: req.method, path: req.originalUrl, status }, err.message);
+  // 4xx are the client's fault: say what was wrong. 5xx are ours: never leak internals.
+  res.status(status).json({ error: status < 500 ? err.message : 'Internal Server Error' });
 });
 
 export default app;
