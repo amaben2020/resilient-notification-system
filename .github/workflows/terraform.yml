@@ -113,3 +113,8 @@ jobs:
           export API_URL=$(terraform -chdir=terraform output -raw api_url)
           npm run smoke
           echo "API: $API_URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Abuse checks against the public API URL
+        if: inputs.apply
+        working-directory: .
+        run: node pentest/abuse-checks.mjs "$(terraform -chdir=terraform output -raw api_url)"
