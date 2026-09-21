@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
-import { insertTransaction, findTransaction } from './payment.repository.js';
+import { insertTransaction, findTransaction, summarizeTransactions } from './payment.repository.js';
 import { paymentCounter, paymentDuration } from '../../observability/metrics.js';
 import { logger } from '../../observability/logger.js';
 
@@ -32,6 +32,10 @@ export async function processPayment(userId, amount) {
   } finally {
     end();
   }
+}
+
+export function paymentStats(userPrefix) {
+  return summarizeTransactions(userPrefix);
 }
 
 export function findPayment(transactionId) {
