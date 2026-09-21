@@ -4,6 +4,7 @@ import request from 'supertest';
 vi.mock('../../src/features/payment-service/payment.repository.js', () => ({
   insertTransaction: vi.fn(async (t) => ({ id: 1, status: 'pending', createdAt: new Date(), ...t })),
   findTransaction: vi.fn(),
+  summarizeTransactions: vi.fn(async () => ({ total: 3, confirmed: 3, notifications: 6 })),
 }));
 vi.mock('@aws-sdk/client-sns', () => ({
   SNSClient: class { send = vi.fn(); },
@@ -60,6 +61,17 @@ describe('GET /api/payments/:transactionId', () => {
     const res = await request(app).get('/api/payments/txn_1');
     expect(res.status).toBe(200);
     expect(res.body.notifications).toHaveLength(2);
+  });
+});
+
+describe('GET /api/payments/stats', () => {
+  it('400 without a usable prefix', async () => {
+    expect((await request(app).get('/api/payments/stats')).status).toBe(400);
+  });
+  it('returns totals for the prefix', async () => {
+    const res = await request(app).get('/api/payments/stats?userPrefix=k6_');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ total: 3, confirmed: 3, notifications: 6 });
   });
 });
 

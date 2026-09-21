@@ -657,6 +657,49 @@ metric `ApproximateAgeOfOldestMessage` per queue is the one to alert on (a
 rising value means a consumer is broken or falling behind), and
 `ApproximateNumberOfMessagesVisible` on the `-dlq` queues should stay at 0.
 
+### 3.8 APM with New Relic (traces, memory, logs)
+
+Grafana/CloudWatch answer "what happened". APM answers "where did the time
+go inside one request" and "which downstream call failed". New Relic is added
+without touching function code, via the official Lambda layer:
+
+```mermaid
+flowchart LR
+    subgraph lambda["Lambda container"]
+        W[newrelic-lambda-wrapper.handler] -->|import index.mjs| H[your handler]
+        H -->|spans: SNS publish, SSM fetch,<br/>Neon HTTPS calls| A[Node agent<br/>in the layer]
+        A -->|local pipe| X[extension process]
+        X -->|reads key once| SSM[(SSM /notif-system/env/<br/>new-relic-license-key)]
+    end
+    X -->|traces, invocation metrics,<br/>function logs| NR[New Relic]
+```
+
+| Piece | Terraform (`newrelic.tf`) | Effect |
+|---|---|---|
+| Layer `NewRelicNodeJS20X` | `layers = [...]` on every function | ships agent + extension |
+| Handler swap | `handler = "newrelic-lambda-wrapper.handler"`, `NEW_RELIC_LAMBDA_HANDLER = "index.handler"` | wrapper records the invocation as a transaction, then calls yours |
+| ESM | `NEW_RELIC_USE_ESM = "true"`, `NODE_OPTIONS = "--experimental-loader /opt/nodejs/node_modules/newrelic/esm-loader.mjs"` | our bundles are `.mjs`; the loader path must be absolute (see failure 15) |
+| Key | `NEW_RELIC_LICENSE_KEY_SSM_PARAMETER_NAME` -> the SSM slot from 4.4 | key never in env vars or state |
+| Logs | `NEW_RELIC_EXTENSION_SEND_FUNCTION_LOGS = "true"` | pino JSON lines arrive in New Relic Logs linked to their trace |
+| Off switch | `new_relic_enabled = false` in tfvars | removes layer and every `NEW_RELIC_*` variable |
+| Bundling | esbuild `external: ['@aws-sdk/*']` | the runtime ships SDK v3; the agent can only instrument modules it sees imported, not inlined code |
+
+What you get: per-function throughput, error rate, duration percentiles,
+**memory used vs allocated** and cold starts (from the platform report);
+**distributed traces** API -> SNS -> SQS -> worker as one trace; logs in
+context. There is no CPU metric for Lambda; Duration is the proxy (CPU share
+scales with `memory_size`).
+
+**Fail-safe.** The agent is fire-and-forget: a missing, expired or wrong
+license key means telemetry is dropped and the extension logs a warning; the
+handler still runs. This was verified by deploying with the SSM parameter still
+at `PLACEHOLDER`: every function served traffic, the integration and smoke
+tests passed. What is *not* covered by that guarantee is broken agent wiring
+(wrong loader path, missing layer): that fails at Node boot, before any code
+runs. The pipeline is the protection there: staging went red twice (failures
+15 and 16), prod was never touched, and the messages that failed sat in the
+DLQs until they were redriven after the fix.
+
 ## 6. Testing
 
 ```mermaid
@@ -739,10 +782,21 @@ symptom -> cause mapping is most of the job.
 | 10 | `lambda:ListTags on event-source-mapping:...` denied after functions created | Event source mappings have their own ARN shape, not `function:` | Add statement for `event-source-mapping:*` |
 | 11 | Console shows nothing in eu-west-2 | `List*` APIs cannot be resource-scoped; policy had none | Read-only `ListFunctions`/`ListQueues`/`ListTopics` on `*` |
 | 12 | Bundled worker: `Dynamic require of "node:os" is not supported` | pino is CJS, esbuild ESM output has no `require` | `createRequire` banner in esbuild config |
+| 14 | `lambda:GetLayerVersion` denied on `arn:aws:lambda:eu-west-2:451483290750:layer:...` | The New Relic layer lives in New Relic's AWS account; scoping to `notif-system-*` can never match it | Explicit statement for that layer ARN |
+| 15 | Every cold start: `Cannot find package 'newrelic' imported from /var/task/` | ESM resolution ignores `NODE_PATH`, so `--experimental-loader newrelic/esm-loader.mjs` cannot see `/opt/nodejs/node_modules` | Absolute loader path |
+| 16 | Workers still crashing, `Layers: null` although apply said "changed" | A scripted edit matched `api.tf`'s alignment but not `main.tf`'s, so workers got `NODE_OPTIONS` without the layer | Fix the block; lesson: grep the result, don't trust the replace |
 | 13 | Public Function URL returns `403 Forbidden` with a correct-looking policy | Since Oct 2025 auth-NONE URLs need **two** statements: `InvokeFunctionUrl` and `InvokeFunction` (condition `InvokedViaFunctionUrl`); provider 5.x could not express the second | Upgrade `hashicorp/aws` to `~> 6.0`, add second `aws_lambda_permission` |
 
 The pattern behind 7-11: read the `AccessDenied` message literally. It names
 the exact action and the exact resource ARN to add.
+
+### Dead-letter queues did their job
+
+Failures 15 and 16 killed every worker invocation for about twenty minutes.
+Two integration-test payments were published during that window. SQS retried
+each three times, then moved them to the DLQs. After the fix, one
+`StartMessageMoveTask` per DLQ replayed them and both ended `confirmed` with
+their notification rows. Nothing was lost and nothing had to be re-sent.
 
 ### Partial applies are fine
 
