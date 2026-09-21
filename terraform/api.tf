@@ -52,7 +52,7 @@ resource "aws_lambda_function" "api" {
   filename         = data.archive_file.api.output_path
   source_code_hash = data.archive_file.api.output_base64sha256
   timeout          = 30
-  memory_size      = 256
+  memory_size      = 512 # load test: 223 of 244 MB used with the agent attached
 
   environment {
     variables = merge(local.new_relic_env, {

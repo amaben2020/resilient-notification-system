@@ -140,7 +140,7 @@ resource "aws_lambda_function" "worker" {
   handler       = local.lambda_handler
   layers        = local.lambda_layers
   runtime       = "nodejs20.x"
-  memory_size   = 256 # headroom for the New Relic agent
+  memory_size   = 512 # New Relic agent uses ~125 MB; load test showed 82% of 256 MB
   filename      = data.archive_file.worker[each.key].output_path
   # Changes when the bundle changes -> Terraform knows to redeploy the code.
   source_code_hash = data.archive_file.worker[each.key].output_base64sha256
